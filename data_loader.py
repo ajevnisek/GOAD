@@ -3,6 +3,8 @@ import numpy as np
 import pandas as pd
 import torchvision.datasets as dset
 import os
+import cv2
+
 
 class Data_Loader:
 
@@ -47,7 +49,8 @@ class Data_Loader:
     def norm(self, data, mu=1):
         return 2 * (data / 255.) - mu
 
-    def get_dataset(self, dataset_name, c_percent=None, true_label=1):
+    def get_dataset(self, dataset_name, c_percent=None, true_label=1,
+                    flip_ones_and_zeros=False):
         if dataset_name == 'cifar10':
             return self.load_data_CIFAR10(true_label)
         if dataset_name == 'kdd':
@@ -60,6 +63,76 @@ class Data_Loader:
             return self.Arrhythmia_train_valid_data()
         if dataset_name == 'ckdd':
             return self.contaminatedKDD99_train_valid_data(c_percent)
+        if dataset_name == 'faces':
+            return self.load_data_faces(flip_ones_and_zeros)
+
+    @staticmethod
+    def get_face_crops_as_np_array(face_crops_dirs_path,
+                                   norm_func):
+        face_crops_dirs = os.listdir(face_crops_dirs_path)
+        face_crops_dirs.sort(key=lambda x: int(x))
+        all_frames = []
+        video_dir_split_indices = []
+        counter = 0
+        for face_crops_dir in face_crops_dirs:
+            dir_full_name = os.path.join(face_crops_dirs_path,
+                                         face_crops_dir)
+            for frame in os.listdir(dir_full_name):
+                frame_path = os.path.join(dir_full_name, frame)
+                image = cv2.imread(frame_path)
+                resized_image = cv2.resize(image, (32, 32))
+                all_frames.append(np.asarray(norm_func(resized_image),
+                                             dtype='float32'))
+                counter += 1
+            video_dir_split_indices.append(counter)
+        return np.stack(all_frames), video_dir_split_indices
+
+
+    def load_data_faces(self, flip_ones_and_zeros):
+        root = './data/faces/face_crops'
+        original_face_crops_path = os.path.join(root, 'original')
+        manipulated_faces_crops_path = os.path.join(root, 'manipulated')
+
+        original_face_crops, video_dir_split_indices = \
+            self.get_face_crops_as_np_array(
+            original_face_crops_path, self.norm)
+        manipulated_face_crops, _ = self.get_face_crops_as_np_array(
+            manipulated_faces_crops_path, self.norm)
+
+        num_of_original_frames, height, width, channels = \
+            original_face_crops.shape
+        # find the closest split to 65% of samples belonging to the original
+        # video frames.
+        num_of_training_samples_index = np.argmin([abs(index - int(
+            num_of_original_frames * 0.65)) for index in
+                                             video_dir_split_indices])
+        num_of_training_samples = video_dir_split_indices[
+            num_of_training_samples_index]
+
+        print(f"Using {num_of_training_samples} samples for training.")
+        x_train = original_face_crops[:num_of_training_samples]
+        original_samples_for_test = original_face_crops[
+                                num_of_training_samples:]
+        x_test = np.concatenate([original_samples_for_test,
+                                manipulated_face_crops])
+        num_of_original_samples_for_test = original_samples_for_test.shape[0]
+        num_of_manipulated_samples_for_test = manipulated_face_crops.shape[0]
+        print(f"num_of_original_samples_for_test = {num_of_original_samples_for_test}")
+        print(
+            f"num_of_manipulated_samples_for_test = {num_of_manipulated_samples_for_test}")
+        if not flip_ones_and_zeros:
+            test_labels = np.concatenate([
+                np.ones_like(range(num_of_original_samples_for_test)),
+                np.zeros_like(range(num_of_manipulated_samples_for_test))])
+        else:
+            test_labels = np.concatenate([
+                np.zeros_like(range(num_of_original_samples_for_test)),
+                np.ones_like(range(num_of_manipulated_samples_for_test))])
+        # randomly permute test samples:
+        indices = np.random.permutation(len(x_test))
+        x_test = x_test[indices]
+        test_labels = test_labels[indices]
+        return x_train, x_test, test_labels
 
 
     def load_data_CIFAR10(self, true_label):
@@ -127,6 +200,7 @@ class Data_Loader:
             cont_indices.append(smp_keys.get_loc(cont))
 
         labels = np.where(df['status'] == 'normal.', 1, 0)
+        import ipdb;ipdb.set_trace()
         return np.array(samples), np.array(labels), cont_indices
 
 

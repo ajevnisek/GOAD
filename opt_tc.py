@@ -4,7 +4,8 @@ import torch
 import torch.utils.data
 from torch.backends import cudnn
 from wideresnet import WideResNet
-from sklearn.metrics import roc_auc_score
+from sklearn.metrics import roc_auc_score, average_precision_score
+from opt_tc_tabular import f_score
 
 cudnn.benchmark = True
 
@@ -26,7 +27,7 @@ class TransClassifier():
         self.optimizer = torch.optim.Adam(self.netWRN.parameters())
 
 
-    def fit_trans_classifier(self, x_train, x_test, y_test):
+    def fit_trans_classifier(self, x_train, x_test, y_test, ratio):
         print("Training")
         self.netWRN.train()
         bs = self.args.batch_size
@@ -92,6 +93,10 @@ class TransClassifier():
                     val_probs_rots[zs_reidx] = -torch.diagonal(logp_sz, 0, 1, 2).cpu().data.numpy()
 
                 val_probs_rots = val_probs_rots.sum(1)
+                f1_score = f_score(val_probs_rots, y_test, ratio)
                 print("Epoch:", epoch, ", AUC: ", roc_auc_score(y_test, -val_probs_rots))
+                print("Epoch:", epoch, ", F1 score: ", f1_score)
+                print("Epoch:", epoch, ", AP score: ", average_precision_score(y_test, -val_probs_rots))
+
 
 

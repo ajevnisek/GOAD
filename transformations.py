@@ -4,6 +4,7 @@ import numpy as np
 from keras.preprocessing.image import apply_affine_transform
 # The code is adapted from https://github.com/izikgo/AnomalyDetectionTransformations/blob/master/transformations.py
 
+
 def get_transformer(type_trans):
     if type_trans == 'complicated':
         tr_x, tr_y = 8, 8

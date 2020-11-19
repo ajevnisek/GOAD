@@ -8,7 +8,8 @@ def load_trans_data(args):
     train_real, val_real, val_fake = dl.get_dataset(args.dataset, args.c_pr)
     y_test_fscore = np.concatenate([np.zeros(len(val_real)), np.ones(len(val_fake))])
     ratio = 100.0 * len(val_real) / (len(val_real) + len(val_fake))
-
+    if args.dataset == "faces":
+        new_array = []
     n_train, n_dims = train_real.shape
     rots = np.random.randn(args.n_rots, n_dims, args.d_out)
 

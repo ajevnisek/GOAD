@@ -11,8 +11,12 @@ def transform_data(data, trans):
 
 def load_trans_data(args, trans):
     dl = Data_Loader()
-    x_train, x_test, y_test = dl.get_dataset(args.dataset, true_label=args.class_ind)
+    x_train, x_test, y_test = dl.get_dataset(args.dataset,
+                                             true_label=args.class_ind,
+                                             flip_ones_and_zeros=args.flip)
+    print("Computing transformed data for train data")
     x_train_trans, labels = transform_data(x_train, trans)
+    print("Computing transformed data for test data")
     x_test_trans, _ = transform_data(x_test, trans)
     x_test_trans, x_train_trans = x_test_trans.transpose(0, 3, 1, 2), x_train_trans.transpose(0, 3, 1, 2)
     y_test = np.array(y_test) == args.class_ind
@@ -22,8 +26,17 @@ def load_trans_data(args, trans):
 def train_anomaly_detector(args):
     transformer = ts.get_transformer(args.type_trans)
     x_train, x_test, y_test = load_trans_data(args, transformer)
+    print("Data fully loaded, using:")
+    print(f"{x_train.shape} as training data")
+    print(f"{x_test.shape} as test data")
+    print(f"{y_test.shape} as test labels")
+    num_of_real_labels_in_test_set = sum(y_test == 0)
+    num_of_fake_labels_in_test_set = sum(y_test == 1)
+    print(f"{num_of_real_labels_in_test_set} of normal labels in dataset")
+    print(f"{num_of_fake_labels_in_test_set} of fake labels in dataset")
+    ratio = 100.0 * num_of_real_labels_in_test_set / (num_of_real_labels_in_test_set + num_of_fake_labels_in_test_set)
     tc_obj = tc.TransClassifier(transformer.n_transforms, args)
-    tc_obj.fit_trans_classifier(x_train, x_test, y_test)
+    tc_obj.fit_trans_classifier(x_train, x_test, y_test, ratio)
 
 
 if __name__ == '__main__':
@@ -49,10 +62,19 @@ if __name__ == '__main__':
     # Exp options
     parser.add_argument('--class_ind', default=1, type=int)
     parser.add_argument('--dataset', default='cifar10', type=str)
+    parser.add_argument('--flip', help='flip zeros and ones at test set',
+                        action='store_true')
     args = parser.parse_args()
 
-    for i in range(10):
-        args.class_ind = i
-        print("Dataset: CIFAR10")
+    if args.dataset == 'cifar10':
+        for i in range(10):
+            args.class_ind = i
+            print("Dataset: CIFAR10")
+            print("True Class:", args.class_ind)
+            train_anomaly_detector(args)
+    else:
+        print(f"Dataset: {args.dataset}")
         print("True Class:", args.class_ind)
+        print(args)
         train_anomaly_detector(args)
+
